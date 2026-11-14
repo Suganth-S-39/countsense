@@ -83,11 +83,20 @@ echo performance | sudo tee /sys/devices/system/cpu/cpu*/cpufreq/scaling_governo
 .venv/bin/python run_poc.py --source data/judge.mp4 --preset pedestrian --timeline --save-video
 
 # E. SHORT ON TIME - process every 3rd frame, about three times faster.
-#    Counts per frame barely change. Do not combine this with --count-line.
+#    Counts per frame barely change (checked: on a 314-frame clip the average and the
+#    maximum were the same with every frame and with every 3rd frame).
+#    Do not combine this with --count-line.
 .venv/bin/python run_poc.py --source data/judge.mp4 --preset traffic --timeline --save-video --stride 3
 
 # OPTIONAL EXTRA for B or C: add  --shared-space  to the end of the command to also get
 # a map of where pedestrians and vehicles used the same ground (fixed camera only).
+
+# OPTIONAL EXTRA for any command: add  --watch-items  to the end to also get an alert line
+# whenever a knife, baseball bat or scissors is detected next to a person, for example:
+#     POSSIBLE THREAT at t=3.40s, frame_000085: knife next to a person (score 0.62), unverified - check annotated/frame_000085.jpg
+# It only knows those three items (no guns), misses small or far-away ones, and cannot tell
+# a threat from a cook holding a knife: a person must look at the picture it names.
+#     .venv/bin/python run_poc.py --source data/judge.mp4 --preset traffic --timeline --save-video --watch-items
 
 
 # ------------------------------------------------------------------------------
@@ -95,7 +104,8 @@ echo performance | sudo tee /sys/devices/system/cpu/cpu*/cpufreq/scaling_governo
 # ------------------------------------------------------------------------------
 
 # The last line of the run says where the results are, for example:
-#     Results    : outputs/traffic_20261114_153012
+#     Results    : outputs/judge_traffic_20261114_153012
+# (the folder is named: input name + preset + date + time)
 # This prints the name of the newest results folder again. Note it down: it is RUN_NAME below.
 ls -t outputs | head -1
 
@@ -115,7 +125,7 @@ exit
 mkdir judge_results -Force
 
 # Copy the results folder from the Pi. Replace RUN_NAME with the name from step 5,
-# for example traffic_20261114_153012.
+# for example judge_traffic_20261114_153012.
 scp -r test@192.168.50.2:countsense/outputs/RUN_NAME judge_results\
 
 # Open the folder in Explorer.

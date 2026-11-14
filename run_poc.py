@@ -9,6 +9,7 @@ import time
 RUN_START = time.perf_counter()  # the whole-run wall clock starts before the slow imports (torch, ExecuTorch)
 
 import argparse  # noqa: E402
+import re  # noqa: E402
 from datetime import datetime  # noqa: E402
 from pathlib import Path  # noqa: E402
 
@@ -131,7 +132,10 @@ def run(args):
         raise SystemExit(f"--watch-items: this model has none of these classes: {', '.join(WATCH_NAMES)}")
 
     started = datetime.now()
-    run_dir = args.out / f"{args.preset}_{started:%Y%m%d_%H%M%S}"
+    # Results folder = the input's name + preset + start time, e.g. knife_traffic_20261114_142122.
+    # The input's name is cut to letters, digits and "_" so it is a safe folder name everywhere.
+    source_name = re.sub(r"[^A-Za-z0-9]+", "_", args.source.stem).strip("_")[:30] or "input"
+    run_dir = args.out / f"{source_name}_{args.preset}_{started:%Y%m%d_%H%M%S}"
     run_dir.mkdir(parents=True, exist_ok=True)
     fps_note = f", {source.fps:.1f} fps" if source.fps else ""
     print(f"Model  : {pte_path} ({pte_path.stat().st_size / 2**20:.2f} MB)  imgsz={imgsz}  threads={args.threads}")
@@ -201,8 +205,10 @@ def run(args):
         print(f"{frame.name:<16} {when:<10} {counts_str}  total={range_text(total_confident, total):<5} "
               f"{level:<9} infer {timing['infer']:.0f} ms{passed}")
         for n in notices or []:
-            print(f"    NOTICE: possible {n['item']} next to a person (score {n['conf']:.2f}), unverified - "
-                  f"please check annotated/{frame.name}.jpg")
+            # The alert line stands on its own: when (for a video), which frame, what, and where to look.
+            at = f"t={frame.time_s:.2f}s, " if frame.time_s is not None else ""
+            print(f"    POSSIBLE THREAT at {at}{frame.name}: {n['item']} next to a person "
+                  f"(score {n['conf']:.2f}), unverified - check annotated/{frame.name}.jpg")
         for c in crossings or []:
             print(f"    PASSED: {c['category']} #{c['track_id']} crossed the line going {c['direction']}")
     loop_s = time.perf_counter() - loop_start
@@ -284,7 +290,10 @@ def run(args):
               f"pedestrians used was also used by vehicles (shared_space.jpg)")
     if args.watch_items:
         found = summary["item_notices"]
-        print(f"Notices    : {found['notices']} in {found['frames']} frame(s) - possible "
+        first = next((r for r in records if r["notices"]), None)       # the first frame with an alert
+        where = "" if first is None else (f", first at {first['name']}" if first["time_s"] is None
+                                          else f", first at t={first['time_s']:.2f}s ({first['name']})")
+        print(f"Threats    : {found['notices']} possible, in {found['frames']} frame(s){where} - "
               f"{' / '.join(WATCH_NAMES)} next to a person, unverified (listed in REPORT.md)")
     print(f"Results    : {run_dir}  (REPORT.md, summary.json, counts.csv, detections.json, annotated/"
           f"{', annotated.mp4' if video else ''}{', timeline.png' if timeline else ''}"

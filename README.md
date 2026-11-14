@@ -114,7 +114,11 @@ On the laptop use `.venv/Scripts/python.exe`; on the Pi use `.venv/bin/python`.
 | `pedestrian` | pedestrian |
 | `public-space` | pedestrian, cyclist |
 
-### Outputs: `outputs/<preset>_<timestamp>/`
+### Outputs: `outputs/<input name>_<preset>_<timestamp>/`
+
+For example `outputs/knife_traffic_20261114_142122/` for `data/knife.mp4`: the input's file
+or folder name (letters, digits and `_` only, at most 30 characters), the preset, and the
+date and time the run started.
 
 | File | Contents |
 |---|---|
@@ -199,7 +203,7 @@ Off by default. With the flag, the same model also looks for three of its 80 obj
 **knife, baseball bat, scissors**. When one is detected with a score of 0.50 or more **and**
 its box touches a person's box (within half the item's size), the run:
 
-- prints `NOTICE: possible knife next to a person (score 0.62), unverified - please check annotated/<frame>.jpg`;
+- prints one line for that frame, with the second and the frame: `POSSIBLE THREAT at t=3.40s, frame_000085: knife next to a person (score 0.62), unverified - check annotated/frame_000085.jpg`, and a closing `Threats` line with how many there were and where the first one is;
 - draws a red box labelled `possible knife 0.62` on that frame;
 - adds an `item_notices` column to `counts.csv` and a table of every notice to `REPORT.md`.
 
@@ -211,6 +215,7 @@ Read this before relying on it:
 - **It is object detection, not behaviour detection.** It cannot tell a threat from a cook, a tailor or a cricketer, and "next to" is box geometry, not "in the hand". Every notice needs a human to look at the image.
 - **It misses most small or distant items.** A knife a few pixels wide is not detected.
 - **There is no rod, stick or gun type** in the model. A rod is occasionally detected as a baseball bat; mostly it is not detected.
+- **It failed on real CCTV footage.** On a shop-camera clip of a person holding a machete (444 x 390 pixels, 314 frames) there was no alert. The model's best "knife" score in any frame was 0.05, at 640, 960 and 1280 alike, against the 0.50 an alert needs, so no setting would have found it. The model learned "knife" from close-up photos of kitchen and table knives; a blurred blade on a security camera does not look like those.
 
 ### Picking a speed setting at the venue
 
