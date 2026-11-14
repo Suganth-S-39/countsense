@@ -1,0 +1,67 @@
+# CountSense Edge - exact Python packages for the Raspberry Pi 5 (the same list ran on the Pi 4)
+# (Raspberry Pi OS Trixie, 64-bit ARM, Python 3.13). Installed OFFLINE by scripts/setup_pi.sh
+# from the wheel files in ~/pi_wheels (see README.md, "Raspberry Pi 5 (offline)").
+#
+# Our code imports only FOUR packages: torch (CPU), executorch, numpy, opencv-python (cv2).
+# Everything else below is a dependency of executorch or torch, pinned so the offline
+# install is identical every time. Resolved for aarch64 Linux + CPython 3.13 on 2026-11-12.
+#
+# torch is NOT a line in this file: its "+cpu" build lives on the PyTorch CPU index, and
+# pointing pip at that index for this whole file would also swap in that index's own
+# builds of executorch and torchao. So torch is always installed by name, first:
+#   offline (setup_pi.sh): pip install --no-index --find-links ~/pi_wheels torch==2.14.1+cpu -r requirements-pi.txt
+#   online:                pip install torch==2.14.1+cpu --index-url https://download.pytorch.org/whl/cpu
+#                          pip install -r requirements-pi.txt
+
+# --- what run_poc.py imports (plus torch==2.14.1+cpu, see above) ---
+executorch==1.5.1
+numpy==2.5.4
+opencv-python==5.0.0.93
+
+# --- pulled in by executorch / torch ---
+antlr4-python3-runtime==4.9.3
+anyio==4.16.0
+certifi==2026.10.23
+charset-normalizer==3.5.2
+click==8.5.1
+expecttest==0.3.0
+filelock==4.2.10
+flatbuffers==25.12.19
+fsspec==2026.9.0
+h11==0.16.0
+hf-xet==1.8.0
+httpcore2==2.16.0
+httpx2==2.16.0
+huggingface-hub==2.4.0
+hydra-core==1.3.8
+hypothesis==6.170.15
+idna==3.20
+jinja2==3.1.6
+kgb==7.3
+markupsafe==3.0.4
+mpmath==1.3.0
+networkx==3.7
+omegaconf==2.3.1
+packaging==26.3
+pandas==3.1.1
+parameterized==0.9.0
+py-cpuinfo==9.0.0
+python-dateutil==4.0.0
+pytorch-tokenizers==1.6.0
+pyyaml==6.0.3
+regex==2026.11.9
+requests==2.34.2
+ruamel-yaml==0.19.1
+sentencepiece==0.2.3
+setuptools==84.2.1
+sortedcontainers==2.4.0
+sympy==1.14.0
+tabulate==0.10.0
+tiktoken==0.14.0
+tokenizers==0.23.3
+torchao==0.18.0
+tqdm==4.70.1
+truststore==0.10.5
+typing-extensions==4.16.0
+tzdata==2026.6
+urllib3==2.8.0

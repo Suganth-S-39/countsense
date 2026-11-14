@@ -1,0 +1,179 @@
+# ==============================================================================
+#  CountSense Edge - commands for running the judges' video (or images) on the Pi
+# ==============================================================================
+#
+#  Pi 5:    user "test", address 192.168.50.2 (direct Ethernet cable), project in ~/countsense
+#  Laptop:  PowerShell, always inside D:\AI
+#
+#  Lines starting with # are comments. Run the other lines one at a time.
+#  [LAPTOP] = type it in PowerShell on the laptop.   [PI] = type it inside the SSH login.
+#  Words in CAPITALS (JUDGE_FILE, RUN_NAME) are placeholders: replace them.
+#  Type the Pi's password whenever ssh or scp asks for it.
+#
+#  Time to expect on the Pi 5: a 20-second clip takes about 2 minutes.
+
+
+# ------------------------------------------------------------------------------
+#  STEP 1  [LAPTOP]  Put the judges' video into the project
+# ------------------------------------------------------------------------------
+
+# Go to the project folder (ssh/scp commands below only work from here).
+cd D:\AI
+
+# Copy their video into data\ under a short name without spaces.
+# Replace JUDGE_FILE with the full path of the file they gave you,
+# for example "E:\clip from judges.mp4". Keep the quotes.
+Copy-Item "JUDGE_FILE" data\judge.mp4
+
+# Check the cable connection to the Pi. You should see replies.
+ping 192.168.50.2
+
+
+# ------------------------------------------------------------------------------
+#  STEP 2  [LAPTOP]  Send the video to the Pi and log in
+# ------------------------------------------------------------------------------
+
+# Copy the video into the project's data folder on the Pi.
+scp data\judge.mp4 test@192.168.50.2:countsense/data/
+
+# Log in to the Pi. Everything in steps 3 to 5 is typed inside this login.
+ssh test@192.168.50.2
+
+
+# ------------------------------------------------------------------------------
+#  STEP 3  [PI]  Get the Pi ready
+# ------------------------------------------------------------------------------
+
+# Go to the project folder.
+cd ~/countsense
+
+# Run the CPU at full speed, so the timings are the best the Pi can do.
+# (This resets every time the Pi restarts. It asks for the password.)
+echo performance | sudo tee /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor
+
+# OPTIONAL: set the Pi's clock if it is wrong (results folders are named by date and time).
+# sudo date -s "2026-11-14 15:00"
+
+
+# ------------------------------------------------------------------------------
+#  STEP 4  [PI]  Run it - pick ONE of the commands A to E
+# ------------------------------------------------------------------------------
+#
+#  Every command prints the counts for each frame, then a summary with the
+#  average inference time, the throughput and where the results were saved.
+#  Presets:  traffic = vehicles + cyclists + pedestrians
+#            pedestrian = people only
+#            public-space = people + cyclists
+
+# A. STANDARD RUN - works for any video. Use this if you are not sure.
+#    Counts per frame, annotated pictures, annotated video, timeline chart.
+.venv/bin/python run_poc.py --source data/judge.mp4 --preset traffic --timeline --save-video
+
+# B. FIXED CAMERA, traffic moving UP or DOWN the picture (like our road-camera test clip).
+#    Also counts each vehicle once when it crosses a line across the middle,
+#    split into "up" and "down", with a rate per minute.
+#    Do NOT use this if the camera moves: the count would be meaningless.
+.venv/bin/python run_poc.py --source data/judge.mp4 --preset traffic --count-line --timeline --save-video
+
+# C. FIXED CAMERA, traffic moving LEFT or RIGHT across the picture.
+#    Same as B, but the line is vertical (v50 = at half the width).
+.venv/bin/python run_poc.py --source data/judge.mp4 --preset traffic --count-line v50 --timeline --save-video
+
+# D. PEOPLE ONLY (a walkway, a crossing, a hall).
+.venv/bin/python run_poc.py --source data/judge.mp4 --preset pedestrian --timeline --save-video
+
+# E. SHORT ON TIME - process every 3rd frame, about three times faster.
+#    Counts per frame barely change. Do not combine this with --count-line.
+.venv/bin/python run_poc.py --source data/judge.mp4 --preset traffic --timeline --save-video --stride 3
+
+# OPTIONAL EXTRA for B or C: add  --shared-space  to the end of the command to also get
+# a map of where pedestrians and vehicles used the same ground (fixed camera only).
+
+
+# ------------------------------------------------------------------------------
+#  STEP 5  [PI]  Check the run and note where the results are
+# ------------------------------------------------------------------------------
+
+# The last line of the run says where the results are, for example:
+#     Results    : outputs/traffic_20261114_153012
+# This prints the name of the newest results folder again. Note it down: it is RUN_NAME below.
+ls -t outputs | head -1
+
+# Check the Pi was not slowed down by heat or a weak power supply.
+# It must print throttled=0x0. Under 75 degrees is fine.
+vcgencmd get_throttled; vcgencmd measure_temp
+
+# Leave the Pi. The next step is typed on the laptop.
+exit
+
+
+# ------------------------------------------------------------------------------
+#  STEP 6  [LAPTOP]  Bring the results to the laptop and show them
+# ------------------------------------------------------------------------------
+
+# Make a folder for the judges' results (does nothing if it already exists).
+mkdir judge_results -Force
+
+# Copy the results folder from the Pi. Replace RUN_NAME with the name from step 5,
+# for example traffic_20261114_153012.
+scp -r test@192.168.50.2:countsense/outputs/RUN_NAME judge_results\
+
+# Open the folder in Explorer.
+explorer judge_results
+
+# What is inside, and which mandatory deliverable it covers:
+#   REPORT.md        category and counts, model used, average inference time,
+#                    throughput, and at least two sample detection pictures
+#   annotated\       one picture per processed frame, with boxes and the counts on top
+#   annotated.mp4    the same as a video
+#   counts.csv       the counts for every frame
+#   timeline.png     the counts over the clip as a chart
+#   summary.json     the report's numbers as data
+
+
+# ==============================================================================
+#  IF THEY GIVE 10-20 IMAGES INSTEAD OF A VIDEO
+# ==============================================================================
+
+# [LAPTOP] Put all their images into one folder: D:\AI\data\judge_images
+# Then send the folder to the Pi and log in.
+cd D:\AI
+scp -r data\judge_images test@192.168.50.2:countsense/data/
+ssh test@192.168.50.2
+
+# [PI] Run on the folder. Never use --stride or --count-line with images.
+cd ~/countsense
+.venv/bin/python run_poc.py --source data/judge_images --preset traffic --timeline
+
+# [PI] ONLY if the objects in their images are small or far away: use the largest model.
+#      It finds more of them, takes about 1 second per image, and sometimes
+#      calls a nearby car "truck" or "bus".
+.venv/bin/python run_poc.py --source data/judge_images --preset traffic --timeline --model yolo11n_1280
+
+# Then do steps 5 and 6 above to check the run and copy the results.
+
+
+# ==============================================================================
+#  IF SOMETHING GOES WRONG
+# ==============================================================================
+
+# "Could not open video"
+#     The Pi cannot read that video format. Ask for an .mp4, or convert the file
+#     to H.264 .mp4 on the laptop, then repeat from step 1.
+
+# ping gets no replies / ssh says "Connection timed out"
+#     Replug the cable at both ends and wait a minute. On the Pi's own screen,
+#     "ip -4 addr show eth0" must show 192.168.50.2.
+
+# scp says: stat local "data\judge.mp4": No such file or directory
+#     PowerShell is not in D:\AI. Run:  cd D:\AI
+
+# The run is slower than about 160 ms per frame, or get_throttled is not 0x0
+#     The Pi is too hot or under-powered. Give it air or a fan, use the 5 A power
+#     supply, wait a minute and run again (or use command E).
+
+# You want to compare model sizes on their clip first (about one minute)  [PI]
+#     .venv/bin/python run_poc.py --source data/judge.mp4 --benchmark
+
+# Shut the Pi down safely when you are completely finished  [PI]
+#     sudo shutdown -h now
