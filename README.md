@@ -55,6 +55,7 @@ dashboards, cloud connectivity, mobile apps.
 | `countsense/annotate.py` | Boxes, labels and the header bar on each frame; `--blur-people`: pixelates head areas |
 | `countsense/tracking.py` | `--count-line`: links boxes between frames and counts each object once when it crosses a line |
 | `countsense/timeline.py` | `--timeline`: the chart of counts over the run, the busiest moment and the busy periods |
+| `countsense/telemetry.py` | `--telemetry`: the Pi's temperature, CPU load, memory, board power and throttle state during the run |
 | `countsense/sharedspace.py` | `--shared-space`: the map of ground used by both pedestrians and vehicles |
 | `countsense/items.py` | `--watch-items`: notices for a knife, baseball bat or scissors next to a person |
 | `countsense/timing.py` | Mean / p50 / p95 timing statistics |
@@ -97,6 +98,7 @@ On the laptop use `.venv/Scripts/python.exe`; on the Pi use `.venv/bin/python`.
 | `--count-line [LINE]` | off | Count each object once when it crosses a line, with its direction. Fixed-camera video only. `LINE` is `h` or `v` plus a percentage: `h50` (the default) is a horizontal line at half the height, `v30` a vertical line at 30% of the width (see below) |
 | `--timeline` | off | Also write `timeline.png`, a chart of the counts over the run, and report the busiest moment and the busy periods (see below) |
 | `--blur-people` | off | Privacy: pixelate the head area of every detected person in all saved images and video (see below) |
+| `--telemetry` | off | Print the Pi's temperature, CPU load, memory, board power and throttle state every 2 seconds during the run, and add their averages and the energy used to `REPORT.md` (see below) |
 | `--benchmark` | off | Run the first 20 frames (or `--max-frames`) through every model size and print a comparison table. Writes no files |
 | `--out` | `outputs` | Root folder for results |
 
@@ -186,6 +188,25 @@ reports how many head areas were pixelated at the end.
 - **There is no face detector.** The head is taken to be the top of the person's box (as tall as 70% of the box's width, at least a quarter of the box).
 - **A person the model misses is not blurred**, and a head that is not at the top of its box (someone bending down) may be only partly covered.
 - The input video or images are never copied into the results folder.
+
+### Pi telemetry (`--telemetry`)
+
+With this flag a line like this appears between the frame lines every 2 seconds:
+
+```
+    PI  temp 66.7 C  cpu 82% at 2400 MHz  ram 1.1/7.9 GB (this run 0.5)  power 6.8 W  throttled: no
+```
+
+- **temp:** the chip's temperature. **cpu:** how busy the four cores were since the last line, and their clock speed. **ram:** memory in use on the whole Pi, and by this run. **power:** what the board is drawing.
+- **throttled:** whether the Pi is slowing itself down.
+  - `no`: full speed.
+  - `YES (heat)` or `YES (low voltage)`: it is slowed down right now, so the timings of this run are worse than the Pi can do. Cool it, or use the 5 A power supply.
+  - `no (was earlier, heat)`: full speed now, but it was slowed down at some time since the Pi was switched on. The Pi remembers that until it is restarted, so this can come from an earlier run.
+- The run ends with a `Telemetry` line and a `Power` line (average and highest readings, energy used, joules per frame), and `REPORT.md` gets a "Pi telemetry during the run" table with the same numbers.
+- Everything is read from Linux's `/proc` and `/sys` files and the Pi's own `vcgencmd` tool (`countsense/telemetry.py`), so nothing extra is installed. A reading the machine cannot give shows as `n/a`.
+- **Board power needs a Pi 5.** It comes from the Pi 5's power chip and covers the board only: USB devices and the losses in the power supply are not in it, so a wall-socket meter reads higher.
+- The readings are taken by a small background thread while the model is running. That matters for power: read between two frames, the cores are idle for a moment and the reading comes out far too low. The cost is two short `vcgencmd` calls every 2 seconds.
+- On Windows there is nothing to read and the flag only prints a note.
 
 ### Shared-space map (`--shared-space`)
 

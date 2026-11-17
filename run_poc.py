@@ -27,6 +27,7 @@ from countsense.preprocess import letterbox  # noqa: E402
 from countsense.report import (build_summary, detections_to_list, write_counts_csv,  # noqa: E402
                                write_detections_json, write_report_md, write_summary_json)
 from countsense.sharedspace import SharedSpace  # noqa: E402
+from countsense.telemetry import Telemetry  # noqa: E402
 from countsense.timeline import draw_timeline, timeline_stats  # noqa: E402
 from countsense.timing import timing_stats  # noqa: E402
 from countsense.tracking import LineCounter, parse_line  # noqa: E402
@@ -66,6 +67,9 @@ def parse_args():
                    help="count each confident object once when it crosses a line, with its direction "
                         "(fixed-camera video only). LINE is h or v plus a percentage: h50 (the default) is a "
                         "horizontal line at half the height, v30 a vertical line at 30%% of the width")
+    p.add_argument("--telemetry", action="store_true",
+                   help="also print the Pi's temperature, CPU load, memory, board power and throttle state "
+                        "every 2 seconds during the run, and add their averages to the report")
     p.add_argument("--benchmark", action="store_true",
                    help=f"compare every model folder next to --model on the first {BENCHMARK_FRAMES} "
                         f"frames (or --max-frames) and print a table; writes no files")
@@ -157,6 +161,13 @@ def run(args):
     records = []
     shared_space = None
     line_counter = None
+    # --telemetry: started here, after the model is loaded, so it covers the frame loop only.
+    telemetry = Telemetry() if args.telemetry else None
+    if telemetry and not telemetry.available:
+        print("Telemetry: not available on this machine (it reads Linux's /proc and /sys: run it on the Pi)\n")
+        telemetry = None
+    if telemetry:
+        telemetry.start()                               # readings are taken in the background every 2 s
     loop_start = time.perf_counter()
     for frame in source:
         boxes, scores, cls, timing = process_frame(method, frame.image, imgsz, args.conf, class_ids + watch_ids)
@@ -211,7 +222,13 @@ def run(args):
                   f"(score {n['conf']:.2f}), unverified - check annotated/{frame.name}.jpg")
         for c in crossings or []:
             print(f"    PASSED: {c['category']} #{c['track_id']} crossed the line going {c['direction']}")
+        for reading in telemetry.fresh() if telemetry else []:      # readings taken since the last frame
+            print(Telemetry.line(reading))
     loop_s = time.perf_counter() - loop_start
+    if telemetry:
+        telemetry.stop()
+        for reading in telemetry.fresh():
+            print(Telemetry.line(reading))
     if video:
         video.close()
     if not records:
@@ -252,6 +269,7 @@ def run(args):
                    "whole_run_s": round(time.perf_counter() - RUN_START, 2)},
         shared_space=shared_space.stats() if shared_space else None,
         passing=passing, timeline=timeline,
+        telemetry=telemetry.summary(len(records)) if telemetry else None,
     )
     write_summary_json(run_dir / "summary.json", summary)
     write_report_md(run_dir / "REPORT.md", summary, records)
@@ -267,6 +285,18 @@ def run(args):
                                       for k, v in cps.items()) + "   (confident-possible)")
     print("Density    : " + "  ".join(f"{k} {v}" for k, v in summary["density_frames"].items())
           + f"   borderline frames: {summary['borderline_frames']}")
+    if telemetry:
+        tm = summary["telemetry"]
+
+        def value(key, which, unit):
+            return "n/a" if tm[key] is None else f"{tm[key][which]} {unit}"
+
+        print(f"Telemetry  : temp avg {value('temp_c', 'avg', 'C')} / max {value('temp_c', 'max', 'C')}   "
+              f"cpu avg {value('cpu_pct', 'avg', '%')}   ram max {value('ram_used_gb', 'max', 'GB')}   "
+              f"throttled: {tm['throttled']}")
+        if tm["energy_j"] is not None:
+            print(f"Power      : avg {value('power_w', 'avg', 'W')} / max {value('power_w', 'max', 'W')}   "
+                  f"energy {tm['energy_j']} J ({tm['energy_j_per_frame']} J per frame)")
     if args.blur_people:
         blurred = sum(r["counts"].get("pedestrian", 0) for r in records)
         print(f"Privacy    : {blurred} head areas pixelated in the saved images of {len(records)} frames")

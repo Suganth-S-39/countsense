@@ -1,4 +1,4 @@
-"""Everything that touches disk: the model files, the input frames and output images."""
+
 from pathlib import Path
 from typing import NamedTuple, Optional
 
@@ -8,7 +8,7 @@ import torch
 from executorch.extension.pybindings import portable_lib
 from executorch.runtime import Runtime
 
-# Fallback class names (index = COCO class id), used if metadata.yaml is missing.
+
 COCO80_NAMES = [
     "person", "bicycle", "car", "motorcycle", "airplane", "bus", "train", "truck",
     "boat", "traffic light", "fire hydrant", "stop sign", "parking meter", "bench",

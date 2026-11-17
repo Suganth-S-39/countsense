@@ -91,6 +91,13 @@ echo performance | sudo tee /sys/devices/system/cpu/cpu*/cpufreq/scaling_governo
 # OPTIONAL EXTRA for B or C: add  --shared-space  to the end of the command to also get
 # a map of where pedestrians and vehicles used the same ground (fixed camera only).
 
+# OPTIONAL EXTRA for any command: add  --telemetry  to the end to see the Pi's own readings
+# every 2 seconds while it runs, and a summary with the energy used at the end, for example:
+#     PI  temp 66.7 C  cpu 82% at 2400 MHz  ram 1.1/7.9 GB (this run 0.5)  power 6.8 W  throttled: no
+# "throttled: no (was earlier, heat)" means: full speed now, but the Pi got hot at some time
+# since it was switched on. "throttled: YES" means it is slowed down right now.
+#     .venv/bin/python run_poc.py --source data/judge.mp4 --preset traffic --timeline --save-video --telemetry
+
 # OPTIONAL EXTRA for any command: add  --watch-items  to the end to also get an alert line
 # whenever a knife, baseball bat or scissors is detected next to a person, for example:
 #     POSSIBLE THREAT at t=3.40s, frame_000085: knife next to a person (score 0.62), unverified - check annotated/frame_000085.jpg

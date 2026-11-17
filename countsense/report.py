@@ -91,7 +91,7 @@ def device_info():
 
 
 def build_summary(records, categories, run_info, model_info, frames_info, wall_info, shared_space=None,
-                  passing=None, timeline=None):
+                  passing=None, timeline=None, telemetry=None):
     """Everything REPORT.md shows, as one dict (also saved as summary.json)."""
     timing = timing_stats([r["timing_ms"] for r in records])
     return {
@@ -112,6 +112,7 @@ def build_summary(records, categories, run_info, model_info, frames_info, wall_i
         "shared_space": shared_space,            # None unless --shared-space was used
         "passing": passing,                      # None unless --count-line was used
         "timeline": timeline,                    # None unless --timeline was used
+        "telemetry": telemetry,                  # None unless --telemetry was used (and readable here)
         "item_notices": None if run_info["watch_items"] is None else {   # None unless --watch-items was used
             "watched": run_info["watch_items"],
             "notices": sum(len(r["notices"]) for r in records),
@@ -275,6 +276,47 @@ def write_report_md(path, summary, records):
                       f"{b['span']} | {b['max_total']} |" for b in tl["busy_periods"]]
         else:
             lines.append("**Busy periods:** none, the density stayed LOW for the whole run.")
+
+    if summary["telemetry"]:
+        tm = summary["telemetry"]
+
+        def row(label, key, unit):
+            v = tm[key]
+            return f"| {label} | n/a | n/a |" if v is None else f"| {label} | {v['avg']} {unit} | {v['max']} {unit} |"
+
+        code = tm["throttled_code"]
+        if code is None:
+            slowed = "not readable on this machine"
+        elif tm["throttled_during_run"]:
+            slowed = (f"**{tm['throttled']}** in at least one reading (code `{code}`): the timings in this "
+                      "report are slower than this Pi manages when it is cool and well powered")
+        elif code != "0x0":
+            slowed = (f"{tm['throttled']} (code `{code}`). It was not slowed down in any reading of this run; "
+                      "the Pi remembers an earlier slowdown until it is restarted")
+        else:
+            slowed = "no (code `0x0`)"
+        lines += [
+            "",
+            "## Pi telemetry during the run",
+            "",
+            "| | Average | Highest |",
+            "|---|---:|---:|",
+            row("Temperature", "temp_c", "°C"),
+            row("CPU load (all cores)", "cpu_pct", "%"),
+            row("CPU clock", "cpu_mhz", "MHz"),
+            row(f"Memory in use, whole Pi (of {tm['ram_total_gb']} GB)", "ram_used_gb", "GB"),
+            row("Memory used by this run", "run_ram_gb", "GB"),
+            row("Board power", "power_w", "W"),
+            "",
+            f"- Slowed down by heat or low voltage (throttled): {slowed}.",
+        ]
+        if tm["energy_j"] is not None:
+            lines.append(f"- Energy for the frame loop: **{tm['energy_j']} J** "
+                         f"({tm['energy_j'] / 3600:.3f} Wh), **{tm['energy_j_per_frame']} J per processed frame**")
+        lines.append(f"- {tm['readings']} readings, one every {tm['interval_s']:g} s over {tm['seconds']} s, "
+                     "taken while the model was running. Board power is read from the Pi 5's own power "
+                     "chip and covers the board only: it leaves out USB devices and the losses in the "
+                     "power supply.")
 
     if summary["shared_space"]:
         s = summary["shared_space"]
